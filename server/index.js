@@ -3,6 +3,13 @@ var cors = require('cors')
 const http = require('http');
 const { Server } = require("socket.io");
 const RSA = require('./utils/rsa')
+const bigInt = require('big-integer');
+const CryptoJS = require('crypto-js');
+const dotenv = require('dotenv');
+const path = require('path');
+dotenv.config({ debug: true, path: path.join(__dirname, './.env') });
+
+
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:3000' }))
@@ -24,28 +31,23 @@ server.listen(8000, () => {
 
 io.on('connection', (socket) => {
   console.log('a user connected');
-  socket.on('message', (message) => {
-    console.log(message)
+  socket.on('key', (key) => {
+    const DES_KEYS = {
+      cK1: RSA.encrypt(bigInt(process.env.K1), key.e, key.n),
+      cK2: RSA.encrypt(bigInt(process.env.K2), key.e, key.n),
+      cK3: RSA.encrypt(bigInt(process.env.K3), key.e, key.n)
+    }
+    socket.emit('3keys', DES_KEYS)
+  })
+
+  socket.on('encryptedMessage', (encryptedMessage) => {
+    const { decrypt: d } = CryptoJS.TripleDES
+    const k = process.env.K1.toString() + process.env.K2.toString() + process.env.K3.toString()
+    msg = d(encryptedMessage, k).toString(CryptoJS.enc.Utf8)
+    console.log('encrypted message', encryptedMessage)
+    console.log('decrypted message',msg)
   })
 });
-
-(() => {
-  const msg = 'hello world'
-  const p = RSA.randomPrime(32)
-  const q = RSA.randomPrime(32)
-
-  const encoded = Buffer.from(msg).toString('hex');
-  const decoded = Buffer.from(encoded, 'hex').toString();
-
-  const key = RSA.generate(64, p, q)
-  // const encodedMsg = RSA.encode(msg)
-  const C = RSA.encrypt(9, key.e, key.n)
-  const M = RSA.decrypt(C, key.d, key.n)
-  // const decodedMsg = RSA.decode(M)
-
-  console.log('msg', decodedMsg)
-
-})();
 
 /* 
 1 - create key pairs in client using RSA
